@@ -124,3 +124,19 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# =============================================================================
+# AUTHENTICATION SETTINGS
+# =============================================================================
+
+# This is the crucial line.
+# It tells Django's authentication system that your login view has the URL name 'login'.
+LOGIN_URL = 'login'
+
+# This tells Django where to redirect users by default AFTER they successfully log in.
+# We use the namespaced URL name we created earlier.
+LOGIN_REDIRECT_URL = 'projects:project-list'
+
+# This tells Django where to redirect users by default AFTER they log out.
+# Redirecting back to the login page is a common pattern.
+LOGOUT_REDIRECT_URL = 'login'
