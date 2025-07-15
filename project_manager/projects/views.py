@@ -7,7 +7,7 @@ from .forms import UserSignUpForm, AddUserToProjectForm, ProjectForm, UserLoginF
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from .models import Project, ProjectMembership  
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponseForbidden, Http404
+from django.http import HttpResponse, HttpResponseForbidden, Http404
 from django.core.exceptions import PermissionDenied
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -28,18 +28,22 @@ class UserRoleRequiredMixin:
     required_roles = []
 
     def dispatch(self, request, *args, **kwargs):
-        project_pk = self.kwargs.get('pk')
+        project_pk = kwargs.get('pk') or kwargs.get('project_pk')
         if not project_pk:
-            raise ValueError("View is missing project 'pk' in URL.")
-        membership = get_object_or_404(
-            ProjectMembership, 
-            project__pk=project_pk, 
-            user=request.user
-        )
+            raise ValueError("View using UserRoleRequiredMixin is missing 'pk' or 'project_pk' in its URL pattern.")
+            
+        try:
+            membership = ProjectMembership.objects.get(
+                project__pk=project_pk, 
+                user=request.user
+            )
+        except ProjectMembership.DoesNotExist:
+            raise Http404
 
         if membership.role not in self.required_roles:
             raise PermissionDenied
 
+        # If all checks pass, proceed to the actual view (e.g., the delete method)
         return super().dispatch(request, *args, **kwargs)
 
 def signup_view(request):
@@ -150,21 +154,40 @@ class ProjectCreateView(LoginRequiredMixin, CreateView):
     form_class = ProjectForm
     template_name = 'projects/project_form.html'
     success_url = reverse_lazy('projects:project-list') 
+    
+    def get(self, request, *args, **kwargs):
+        """Handle GET requests."""
+        # If the request is from HTMX, render just the form partial
+        if request.htmx:
+            form = self.get_form()
+            return render(request, 'projects/_project_form_partial.html', {'form': form})
+        
+        # For a normal request, let the default CreateView behavior handle it
+        return super().get(request, *args, **kwargs)
 
     def form_valid(self, form):
         """
         This method is called when valid form data has been POSTed.
-        It should return an HttpResponse.
         """
-        response = super().form_valid(form)
-        
+        # Save the project and create the 'Owner' membership
+        self.object = form.save()
         ProjectMembership.objects.create(
             project=self.object,
             user=self.request.user,
             role='Owner'
         )
         
-        return response
+        # If the request is from HTMX, return the updated project list partial
+        if self.request.htmx:
+            projects = Project.objects.filter(members=self.request.user).order_by('-updated_at')
+            return render(self.request, 'projects/_project_list_partial.html', {'projects': projects})
+
+        # For a normal form submission, redirect to the success_url
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        # The non-HTMX success redirect now points to the global project list
+        return reverse_lazy('project-list')
 
 class ProjectUpdateView(LoginRequiredMixin, UpdateView):
     """
@@ -201,17 +224,13 @@ class ManageProjectUsersView(LoginRequiredMixin, UserRoleRequiredMixin, View):
     """
     template_name = 'projects/manage_users.html'
     required_roles = ['Owner']
+
     def get(self, request, pk):
         """Handles GET requests: Displays the page with user list and add form."""
         project = get_object_or_404(Project, pk=pk)
         members = ProjectMembership.objects.filter(project=project).order_by('user__username')
         form = AddUserToProjectForm()
-
-        context = {
-            'project': project,
-            'members': members,
-            'form': form
-        }
+        context = {'project': project, 'members': members, 'form': form}
         return render(request, self.template_name, context)
 
     def post(self, request, pk):
@@ -227,19 +246,40 @@ class ManageProjectUsersView(LoginRequiredMixin, UserRoleRequiredMixin, View):
             if ProjectMembership.objects.filter(project=project, user=user_to_add).exists():
                 messages.error(request, f"User '{username}' is already a member of this project.")
             else:
-                ProjectMembership.objects.create(
-                    project=project,
-                    user=user_to_add,
-                    role=role
-                )
-                messages.success(request, f"Successfully added '{username}' as an {role}.")
+                ProjectMembership.objects.create(project=project, user=user_to_add, role=role)
+
+            if request.htmx:
+                members = ProjectMembership.objects.filter(project=project).order_by('user__username')
+                return render(request, 'projects/_member_list_partial.html', {'project': project, 'members': members})
             
             return redirect('projects:project-manage-users', pk=project.pk)
         
         members = ProjectMembership.objects.filter(project=project).order_by('user__username')
-        context = {
-            'project': project,
-            'members': members,
-            'form': form
-        }
+        context = {'project': project, 'members': members, 'form': form}
         return render(request, self.template_name, context)
+
+
+class RemoveUserFromProjectView(LoginRequiredMixin, UserRoleRequiredMixin, View):
+    required_roles = ['Owner']
+
+    def dispatch(self, request, *args, **kwargs):
+        project_pk = kwargs.get('project_pk')
+        membership = get_object_or_404(ProjectMembership, project__pk=project_pk, user=request.user)
+        if membership.role not in self.required_roles:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def delete(self, request, project_pk, user_pk):
+        project = get_object_or_404(Project, pk=project_pk)
+        user_to_remove = get_object_or_404(User, pk=user_pk)
+        
+        membership = get_object_or_404(
+            ProjectMembership, project=project, user=user_to_remove
+        )
+        
+        if membership.role == 'Owner':
+            return HttpResponse("Cannot remove the project owner.", status=400)
+
+        membership.delete()
+        
+        return HttpResponse(status=200)
