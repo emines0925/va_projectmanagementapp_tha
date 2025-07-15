@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Users for {{ project.name }}{% endblock %}
+
+{% block content %}
+  <h2>Manage Users for "{{ project.name }}"</h2>
+  <hr>
+
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+        <li class="{{ message.tags }}">
+          {{ message }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <h3>Current Members</h3>
+  {% if members %}
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr style="text-align: left; border-bottom: 2px solid #ddd;">
+          <th style="padding: 8px;">Username</th>
+          <th style="padding: 8px;">Role</th>
+          <th style="padding: 8px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for membership in members %}
+          <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 8px;">{{ membership.user.username }}</td>
+            <td style="padding: 8px;">{{ membership.role }}</td>
+            <td style="padding: 8px;">
+              {% if membership.role != 'Owner' %}
+                <button disabled>Remove</button>
+              {% else %}
+                (You)
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>Only you are a member of this project.</p>
+  {% endif %}
+  
+  <hr style="margin-top: 2rem;">
+
+  <h3>Add New User</h3>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Add User</button>
+  </form>
+
+  <p style="margin-top: 2rem;">
+    <a href="{% url 'projects:project-detail' project.pk %}">← Back to Project Details</a>
+  </p>
+{% endblock %}

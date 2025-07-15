@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm Delete{% endblock %}
+
+{% block content %}
+  <h2>Are you sure?</h2>
+  <p>You are about to permanently delete the project: <strong>"{{ object.name }}"</strong>.</p>
+  <p style="color: #dc3545; font-weight: bold;">This action cannot be undone.</p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" style="background-color: #dc3545;">Yes, Delete</button>
+    <a href="{% url 'projects:project-detail' object.pk %}" style="margin-left: 15px; color: #555;">Cancel</a>
+  </form>
+{% endblock %}

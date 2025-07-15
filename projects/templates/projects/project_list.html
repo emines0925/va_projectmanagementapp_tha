@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}My Projects{% endblock %}
+
+{% block content %}
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h2>My Projects</h2>
+    <button hx-get="/project-create">Create New Project</button>
+  </div>
+  <hr>
+  
+  {% if projects %}
+    <ul style="list-style: none; padding: 0;">
+      {% for project in projects %}
+        <li style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 10px;">
+          <a href="{% url 'projects:project-detail' project.pk %}" style="text-decoration: none; color: #333; font-weight: bold; font-size: 1.2rem;">
+            {{ project.name }}
+          </a>
+          <p style="margin-top: 5px; color: #666;">{{ project.description|truncatewords:20 }}</p>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>You are not a member of any projects yet.</p>
+    <p>Why not <a href="{% url 'projects:project-create' %}">create one</a>?</p>
+  {% endif %}
+{% endblock %}
