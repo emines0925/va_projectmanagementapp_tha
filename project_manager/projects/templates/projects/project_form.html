@@ -1,0 +1,14 @@
+{% extends "base.html" %} {% block title %} {% if form.instance.pk %}Edit
+Project{% else %}Create Project{% endif %} {% endblock %} {% block content %}
+<h2>
+  {% if form.instance.pk %}Edit {{ form.instance.name }}{% else %}Create a New
+  Project{% endif %}
+</h2>
+
+<form method="post">
+  {% csrf_token %} {{ form.as_p }}
+  <button type="submit">
+    {% if form.instance.pk %}Save Changes{% else %}Create Project{% endif %}
+  </button>
+</form>
+{% endblock %}

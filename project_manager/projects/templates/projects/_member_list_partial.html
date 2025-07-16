@@ -1,0 +1,25 @@
+{% for membership in members %}
+  <tr id="membership-{{ membership.pk }}" style="border-bottom: 1px solid #eee;">
+    <td style="padding: 8px;">{{ membership.user.username }}</td>
+    <td style="padding: 8px;">{{ membership.get_role_display }}</td>
+    <td style="padding: 8px;">
+      {% if membership.role != 'Owner' %}
+        <button
+          hx-delete="{% url 'projects:project-remove-user' project_pk=project.pk user_pk=membership.user.pk %}"
+          hx-confirm="Are you sure you want to remove {{ membership.user.username }} from this project?"
+          hx-target="#membership-{{ membership.pk }}"
+          hx-swap="outerHTML"
+          style="background-color: #dc3545;"
+        >
+          Remove
+        </button>
+      {% else %}
+        (You)
+      {% endif %}
+    </td>
+  </tr>
+{% empty %}
+  <tr>
+    <td colspan="3" style="padding: 8px;">There are no other members in this project.</td>
+  </tr>
+{% endfor %}
