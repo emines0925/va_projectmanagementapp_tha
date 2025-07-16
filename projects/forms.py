@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
 
-from .models import Project
+from .models import Project, Comment
 
 class UserSignUpForm(UserCreationForm):
     email = forms.EmailField(required=True, help_text='Required. Please enter a valid email address.')
@@ -94,3 +94,19 @@ class AddUserToProjectForm(forms.Form):
         if not User.objects.filter(username=username).exists():
             raise forms.ValidationError("A user with this username was not found.")
         return username
+    
+class CommentForm(forms.ModelForm):
+    """
+    A ModelForm for creating comments on projects.
+    This form allows users to add comments to a project.
+    """
+    class Meta:
+        model = Comment
+        fields = ['text']
+        widgets = {
+            'text': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Add your comment here...'
+            })
+        }

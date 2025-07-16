@@ -1,0 +1,9 @@
+{% for comment in project.comments.all %}
+    {% if user_role == 'Owner' %}
+    <a href="{% url 'projects:project-delete-comment' comment.pk %}"><button style="background-color: #dc3545;">Delete Comment</button></a>
+    {% endif %}
+    <p style="margin-top: 5px; color: #666;">{{ comment.text }}</p>
+{% endfor %}
+{% if not project.comments.exists %}
+    <p>No comments yet.</p>
+{% endif %}

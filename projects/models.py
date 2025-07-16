@@ -1,6 +1,18 @@
 from django.db import models
 
-# Create your models here.
+class Comment(models.Model):
+    project = models.ForeignKey('Project', on_delete=models.CASCADE)
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Comment by {self.user.username} on {self.project.name}"
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Comment'
+        verbose_name_plural = 'Comments'
+
 class Project(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField()
@@ -9,6 +21,7 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     members= models.ManyToManyField('auth.User', through='ProjectMembership', related_name='projects')
+    comments = models.ForeignKey('Comment',  related_name='project_comments', on_delete=models.DO_NOTHING, null=True, blank=True)
 
     def __str__(self):
         return self.name

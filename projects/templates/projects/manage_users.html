@@ -7,7 +7,7 @@
   <hr>
 
   {% if messages %}
-    <ul class="messages">
+    <ul class="messages" style="list-style: none; padding: 0;">
       {% for message in messages %}
         <li class="{{ message.tags }}">
           {{ message }}
@@ -17,39 +17,29 @@
   {% endif %}
 
   <h3>Current Members</h3>
-  {% if members %}
-    <table style="width: 100%; border-collapse: collapse;">
-      <thead>
-        <tr style="text-align: left; border-bottom: 2px solid #ddd;">
-          <th style="padding: 8px;">Username</th>
-          <th style="padding: 8px;">Role</th>
-          <th style="padding: 8px;">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for membership in members %}
-          <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 8px;">{{ membership.user.username }}</td>
-            <td style="padding: 8px;">{{ membership.role }}</td>
-            <td style="padding: 8px;">
-              {% if membership.role != 'Owner' %}
-                <button disabled>Remove</button>
-              {% else %}
-                (You)
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p>Only you are a member of this project.</p>
-  {% endif %}
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr style="text-align: left; border-bottom: 2px solid #ddd;">
+        <th style="padding: 8px;">Username</th>
+        <th style="padding: 8px;">Role</th>
+        <th style="padding: 8px;">Actions</th>
+      </tr>
+    </thead>
+    <!-- This tbody has an ID so HTMX can replace its content -->
+    <tbody id="member-list-body">
+      {% include "projects/_member_list_partial.html" %}
+    </tbody>
+  </table>
   
   <hr style="margin-top: 2rem;">
 
   <h3>Add New User</h3>
-  <form method="post">
+  <!-- This form now uses HTMX to submit and update the list above -->
+  <form 
+    hx-post="{% url 'projects:project-manage-users' project.pk %}"
+    hx-target="#member-list-body"
+    hx-swap="innerHTML"
+  >
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Add User</button>

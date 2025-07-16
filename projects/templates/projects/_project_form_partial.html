@@ -1,0 +1,27 @@
+<!-- projects/templates/projects/_project_form_partial.html -->
+
+<!-- This div provides some nice padding and a background color for the form -->
+<div style="padding: 20px; background-color: #f0f8ff; border-radius: 5px; margin-top: 1rem; border: 1px solid #ddd;">
+  <h3>Create a New Project</h3>
+  
+  <form 
+    hx-post="{% url 'projects:project-create' %}" 
+    hx-target="#project-list-container" 
+    hx-swap="outerHTML"
+    hx-on="htmx:afterRequest: document.getElementById('project-form-container').innerHTML = ''"
+  >
+    {% csrf_token %}
+    {{ form.as_p }}
+    
+    <button type="submit">Save Project</button>
+    
+    <!-- This button cancels the action by clearing the container's content -->
+    <button 
+      type="button" 
+      onclick="this.closest('#project-form-container').innerHTML = ''"
+      style="background-color: #6c757d;"
+    >
+      Cancel
+    </button>
+  </form>
+</div>

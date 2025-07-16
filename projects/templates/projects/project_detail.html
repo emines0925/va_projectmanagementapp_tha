@@ -21,7 +21,6 @@
       {% if user_role == 'Owner' %}
         <a href="{% url 'projects:project-delete' object.pk %}"><button style="background-color: #dc3545;">Delete Project</button></a>
       {% endif %}
-
       </div>
     </div>
   </div>
@@ -55,6 +54,13 @@
     </table>
   </div>
 
+  <div id="comment-container">
+    {% include "projects/_comment_form_partial.html" with project=object %}
+  </div>
+  <div id="comment-list-container">
+    <h2>Comments</h2>
+      {% include "projects/_comment_partial.html" with project=object %}
+  </div>
   <hr>
   <a href="{% url 'projects:project-list' %}">← Back to all projects</a>
 {% endblock %}

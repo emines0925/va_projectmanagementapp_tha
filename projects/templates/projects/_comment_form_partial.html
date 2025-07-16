@@ -1,0 +1,16 @@
+<div style="padding: 20px; background-color: #f0f8ff; border-radius: 5px; margin-top: 1rem; border: 1px solid #ddd;">
+    {% if user_role == 'Owner' %}
+    <form 
+        hx-post="{% url 'projects:project-comment' project.pk %}" 
+        hx-trigger="submit"
+        hx-target="#comment-list-container"
+        hx-swap="innerHTML"
+        hx-headers='{"Content-Type": "application/json"}'
+    >
+        <textarea name="text" placeholder="Write a comment..."></textarea>
+        <button type="submit">Submit</button>
+    </form>
+    {% else %}
+    <p>You do not have permission to comment on this project.</p>
+    {% endif %}
+</div>

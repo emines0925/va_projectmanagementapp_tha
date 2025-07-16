@@ -1,8 +1,8 @@
 from django.urls import path
 from .views import (
-    ManageProjectUsersView, signup_view, UserLoginView, UserLogoutView, 
+    ManageProjectUsersView, RemoveUserFromProjectView, signup_view, UserLoginView, UserLogoutView, 
     ProjectListView, ProjectDetailView, ProjectCreateView, 
-    ProjectUpdateView, ProjectDeleteView
+    ProjectUpdateView, ProjectDeleteView, CommentOnProject, DeleteComment
 )
 
 app_name = 'projects'
@@ -17,4 +17,7 @@ urlpatterns = [
     path('projects/<int:pk>/delete/', ProjectDeleteView.as_view(), name='project-delete'),
     path('projects/<int:pk>/manage/', ManageProjectUsersView.as_view(), name='project-manage-users'),
     path('create/', ProjectCreateView.as_view(), name='project-create'),
+    path('<int:project_pk>/remove_user/<int:user_pk>/', RemoveUserFromProjectView.as_view(), name='project-remove-user'),
+    path('projects/<int:pk>/comment/', CommentOnProject.as_view(), name='project-comment'),
+    path('projects/<int:pk>/delete_comment/<int:comment_pk>/', DeleteComment.as_view(), name='project-delete-comment'),
 ]

@@ -3,14 +3,21 @@ from django.urls import reverse_lazy
 from django.contrib.auth import login
 from django.contrib.auth.views import LoginView, LogoutView
 from django.views import View
+
+from rest_framework.views import APIView
+from django.http import JsonResponse
+from rest_framework import status, permissions
+from .models import Comment, Project
+from .serializers import CommentSerializer
 from .forms import UserSignUpForm, AddUserToProjectForm, ProjectForm, UserLoginForm
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from .models import Project, ProjectMembership  
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponseForbidden, Http404
+from django.http import HttpResponse, HttpResponseForbidden, Http404
 from django.core.exceptions import PermissionDenied
 from django.contrib import messages
 from django.contrib.auth.models import User
+from .models import Comment, ProjectMembership
 
 class UserRoleRequiredMixin:
     """
@@ -28,18 +35,22 @@ class UserRoleRequiredMixin:
     required_roles = []
 
     def dispatch(self, request, *args, **kwargs):
-        project_pk = self.kwargs.get('pk')
+        project_pk = kwargs.get('pk') or kwargs.get('project_pk')
         if not project_pk:
-            raise ValueError("View is missing project 'pk' in URL.")
-        membership = get_object_or_404(
-            ProjectMembership, 
-            project__pk=project_pk, 
-            user=request.user
-        )
+            raise ValueError("View using UserRoleRequiredMixin is missing 'pk' or 'project_pk' in its URL pattern.")
+            
+        try:
+            membership = ProjectMembership.objects.get(
+                project__pk=project_pk, 
+                user=request.user
+            )
+        except ProjectMembership.DoesNotExist:
+            raise Http404
 
         if membership.role not in self.required_roles:
             raise PermissionDenied
 
+        # If all checks pass, proceed to the actual view (e.g., the delete method)
         return super().dispatch(request, *args, **kwargs)
 
 def signup_view(request):
@@ -78,7 +89,6 @@ class UserLoginView(LoginView):
     success_url = reverse_lazy('projects:project-list')
 
 
-# --- Logout View (Class-Based) ---
 class UserLogoutView(LogoutView):
     """
     Handles user logout using Django's built-in LogoutView.
@@ -96,6 +106,7 @@ class ProjectListView(LoginRequiredMixin, ListView):
     model = Project
     template_name = 'projects/project_list.html'
     context_object_name = 'projects'
+
 class ProjectListView(LoginRequiredMixin, ListView):
     model = Project
     template_name = 'projects/project_list.html'
@@ -119,27 +130,18 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         return Project.objects.filter(members=self.request.user)
 
     def get_context_data(self, **kwargs):
-        # 1. First, call the base implementation to get the default context
         context = super().get_context_data(**kwargs)
-        
-        # 2. Get the project object from the context
         project = self.get_object()
         
-        # 3. Find the membership for the current user and this specific project.
-        #    We wrap it in a try-except block in case something unexpected happens.
         try:
             membership = ProjectMembership.objects.get(
                 project=project,
                 user=self.request.user
             )
-            # 4. Add the user's role to the context
             context['user_role'] = membership.role
         except ProjectMembership.DoesNotExist:
-            # This should ideally not happen if get_queryset is working correctly,
-            # but it's a safe fallback.
             context['user_role'] = None
             
-        # 5. Return the updated context
         return context
     
 class ProjectCreateView(LoginRequiredMixin, CreateView):
@@ -150,21 +152,34 @@ class ProjectCreateView(LoginRequiredMixin, CreateView):
     form_class = ProjectForm
     template_name = 'projects/project_form.html'
     success_url = reverse_lazy('projects:project-list') 
+    
+    def get(self, request, *args, **kwargs):
+        """Handle GET requests."""
+        if request.htmx:
+            form = self.get_form()
+            return render(request, 'projects/_project_form_partial.html', {'form': form})
+        
+        return super().get(request, *args, **kwargs)
 
     def form_valid(self, form):
         """
         This method is called when valid form data has been POSTed.
-        It should return an HttpResponse.
         """
-        response = super().form_valid(form)
-        
+        self.object = form.save()
         ProjectMembership.objects.create(
             project=self.object,
             user=self.request.user,
             role='Owner'
         )
         
-        return response
+        if self.request.htmx:
+            projects = Project.objects.filter(members=self.request.user).order_by('-updated_at')
+            return render(self.request, 'projects/_project_list_partial.html', {'projects': projects})
+
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        return reverse_lazy('project-list')
 
 class ProjectUpdateView(LoginRequiredMixin, UpdateView):
     """
@@ -201,17 +216,13 @@ class ManageProjectUsersView(LoginRequiredMixin, UserRoleRequiredMixin, View):
     """
     template_name = 'projects/manage_users.html'
     required_roles = ['Owner']
+
     def get(self, request, pk):
         """Handles GET requests: Displays the page with user list and add form."""
         project = get_object_or_404(Project, pk=pk)
         members = ProjectMembership.objects.filter(project=project).order_by('user__username')
         form = AddUserToProjectForm()
-
-        context = {
-            'project': project,
-            'members': members,
-            'form': form
-        }
+        context = {'project': project, 'members': members, 'form': form}
         return render(request, self.template_name, context)
 
     def post(self, request, pk):
@@ -227,19 +238,85 @@ class ManageProjectUsersView(LoginRequiredMixin, UserRoleRequiredMixin, View):
             if ProjectMembership.objects.filter(project=project, user=user_to_add).exists():
                 messages.error(request, f"User '{username}' is already a member of this project.")
             else:
-                ProjectMembership.objects.create(
-                    project=project,
-                    user=user_to_add,
-                    role=role
-                )
-                messages.success(request, f"Successfully added '{username}' as an {role}.")
+                ProjectMembership.objects.create(project=project, user=user_to_add, role=role)
+
+            if request.htmx:
+                members = ProjectMembership.objects.filter(project=project).order_by('user__username')
+                return render(request, 'projects/_member_list_partial.html', {'project': project, 'members': members})
             
             return redirect('projects:project-manage-users', pk=project.pk)
         
         members = ProjectMembership.objects.filter(project=project).order_by('user__username')
-        context = {
-            'project': project,
-            'members': members,
-            'form': form
-        }
+        context = {'project': project, 'members': members, 'form': form}
         return render(request, self.template_name, context)
+
+
+class RemoveUserFromProjectView(LoginRequiredMixin, UserRoleRequiredMixin, View):
+    required_roles = ['Owner']
+
+    def dispatch(self, request, *args, **kwargs):
+        project_pk = kwargs.get('project_pk')
+        membership = get_object_or_404(ProjectMembership, project__pk=project_pk, user=request.user)
+        if membership.role not in self.required_roles:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def delete(self, request, project_pk, user_pk):
+        project = get_object_or_404(Project, pk=project_pk)
+        user_to_remove = get_object_or_404(User, pk=user_pk)
+        
+        membership = get_object_or_404(
+            ProjectMembership, project=project, user=user_to_remove
+        )
+        
+        if membership.role == 'Owner':
+            return HttpResponse("Cannot remove the project owner.", status=400)
+
+        membership.delete()
+        
+        return HttpResponse(status=200)
+    
+class CommentOnProject(UserRoleRequiredMixin, LoginRequiredMixin, View):
+    """
+    Allows users to comment on a project.
+    """
+
+    required_roles = ['Owner', 'Editor']
+    def post(self, request, pk):
+        project = Project.objects.get(pk=pk)
+        if request.content_type == 'application/json':
+            import json
+            try:
+                data = json.loads(request.body)
+            except Exception:
+                return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        else:
+            data = request.POST
+        serializer = CommentSerializer(data=data)
+        if serializer.is_valid():
+            comment = Comment.objects.create(
+                project=project,
+                user=request.user,
+                text=serializer.validated_data['text']
+            )
+            comment.save()
+            return HttpResponse(project.comments, status=status.HTTP_201_CREATED)
+        return HttpResponse(serializer.error_messages, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class DeleteComment(UserRoleRequiredMixin, LoginRequiredMixin, View):
+    """
+    Allows users to delete their own comments or the project owner's comments.
+    """
+    required_roles = ['Owner']
+
+    def post(self, request, project_pk, comment_pk):
+        project = get_object_or_404(Project, pk=project_pk)
+        comment = get_object_or_404(Comment, pk=comment_pk, project=project)
+
+        comment.delete()
+
+        if request.htmx:
+            return HttpResponse(status=204)  # No content response for HTMX
+
+        return redirect('projects:project-detail', pk=project.pk)
